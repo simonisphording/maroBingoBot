@@ -156,7 +156,6 @@ async def create_bingo_sheet(ctx, target_user: discord.Member = None):
 @bot.command(name="viewBingoSheet", help="View your BINGO sheet")
 async def view_bingo_sheet(message, target_user: discord.Member = None):
     user = target_user if target_user else message.author
-    print(user)
     user_bingo_file = f"bingo_sheets/{user.id}.txt"
 
     # Check if the user has a bingo sheet
