@@ -15,6 +15,8 @@ intents.message_content = True
 bot = commands.Bot(command_prefix='/', intents=intents, case_insensitive=True)
 
 settings_file = "settings.json"
+free_space = True
+bingo_role = "Bingo Master"
 
 def read_sheet(path):
     expansion = None
@@ -32,7 +34,7 @@ def load_settings():
         with open(settings_file, "r") as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        return {"free_space_enabled": False}
+        return {"free_space_enabled": False, "bingo_role": "Bingo Master"}
 
 def save_settings(settings):
     with open(settings_file, "w") as f:
@@ -40,8 +42,10 @@ def save_settings(settings):
 
 @bot.command(name="setMaroClues", help="Set clues for the upcoming expansion.")
 async def set_maro_clues(ctx):
-    # Check if the user has administrator permissions
-    if not ctx.author.guild_permissions.administrator:
+    # Check if the user has administrator permissions or bingo role
+    has_bingo_role = discord.utils.get(ctx.author.roles, name=bingo_role)
+
+    if not (ctx.author.guild_permissions.administrator or has_bingo_role):
         await ctx.send("You need to be an administrator to set the clues.")
         return
 
@@ -81,9 +85,17 @@ async def list_maro_clues(ctx):
     clues_text = "\n".join(clues)
     await ctx.send(f"**Clues for {expansion}:**\n```{clues_text}```")
 
-@bot.command(name="createBingoSheet", help="Create a new BINGO sheet")
-async def create_bingo_sheet(ctx):
-    user_bingo_file = f"bingo_sheets/{ctx.author.id}.txt"
+@bot.command(name="createBingoSheet", help="Create a new BINGO sheet for yourself or another user (Admins only).")
+async def create_bingo_sheet(ctx, target_user: discord.Member = None):
+    # Determine the user for whom to create the bingo sheet
+    user = target_user if target_user else ctx.author
+    user_bingo_file = f"bingo_sheets/{user.id}.txt"
+
+    # Check if the command is invoked by an admin when targeting another user
+    has_bingo_role = discord.utils.get(ctx.author.roles, name=bingo_role)
+    if target_user and not (ctx.author.guild_permissions.administrator or has_bingo_role):
+        await ctx.send("Only administrators can create a bingo sheet for other users.")
+        return
 
     # Read clues from 'clues.txt'
     if not os.path.exists("clues.txt"):
@@ -96,10 +108,16 @@ async def create_bingo_sheet(ctx):
     if os.path.exists(user_bingo_file):
         user_expansion, user_clues = read_sheet(user_bingo_file)
         if user_expansion == expansion:
-            await ctx.send(
-                f"{ctx.author.mention}, you already have a bingo sheet for '{expansion}'. "
-                "Would you like to overwrite it? Reply with 'yes' to confirm, or 'no' to cancel."
-            )
+            if target_user:
+                await ctx.send(
+                    f"{user.mention}, already has a bingo sheet for '{expansion}'. "
+                    "Would you like to overwrite it? Reply with 'yes' to confirm, or 'no' to cancel."
+                )
+            else:
+                await ctx.send(
+                    f"{user.mention}, you already have a bingo sheet for '{expansion}'. "
+                    "Would you like to overwrite it? Reply with 'yes' to confirm, or 'no' to cancel."
+                )
 
             def check(m):
                 return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() in ["yes", "no"]
@@ -117,8 +135,7 @@ async def create_bingo_sheet(ctx):
     clue_selection = sample(clues, 25)
 
     # Set middle to free if applicable
-    settings = load_settings()
-    if settings["free_space_enabled"]:
+    if free_space:
         clue_selection[12] = "Free"
 
     # Save the new bingo sheet
@@ -127,12 +144,20 @@ async def create_bingo_sheet(ctx):
         for c in clue_selection:
             outfile.write(c + "\n")
 
+    # Notify the creation
+    if target_user:
+        await ctx.send(f"Bingo sheet created for {user.mention}.")
+    else:
+        await ctx.send(f"{user.mention}, your new bingo sheet has been created.")
+
     # Display the newly created bingo sheet
-    await view_bingo_sheet(ctx)
+    await view_bingo_sheet(ctx, user)
 
 @bot.command(name="viewBingoSheet", help="View your BINGO sheet")
-async def view_bingo_sheet(message):
-    user_bingo_file = f"bingo_sheets/{message.author.id}.txt"
+async def view_bingo_sheet(message, target_user: discord.Member = None):
+    user = target_user if target_user else message.author
+    print(user)
+    user_bingo_file = f"bingo_sheets/{user.id}.txt"
 
     # Check if the user has a bingo sheet
     if not os.path.exists(user_bingo_file):
@@ -260,12 +285,12 @@ async def view_bingo_sheet(message):
                 draw.line([x, y, x + cell_size, y + cell_size], fill="red", width=3)
                 draw.line([x + cell_size, y, x, y + cell_size], fill="red", width=3)
 
-    image_path = f"temp_bingo_{message.author.id}.png"
+    image_path = f"temp_bingo_{user.id}.png"
     img.save(image_path)
 
     with open(image_path, "rb") as f:
         picture = discord.File(f)
-        await message.channel.send(f"{message.author.mention}'s Bingo Sheet for '{expansion}'", file=picture)
+        await message.channel.send(f"{user.mention}'s Bingo Sheet for '{expansion}'", file=picture)
 
     os.remove(image_path)
 
@@ -310,24 +335,27 @@ async def cross_off_square(ctx, square: str):
 
 @bot.command(name="freeSpace", help="Make middle spaces free")
 async def free_space_on(ctx, toggle: str):
-    if not ctx.author.guild_permissions.administrator:
+    has_bingo_role = discord.utils.get(ctx.author.roles, name=bingo_role)
+    if not (ctx.author.guild_permissions.administrator or has_bingo_role):
         await ctx.send("You need to be an administrator to change settings.")
         return
+
+    global free_space
 
     # Check if the toggle input is valid
     toggle = toggle.lower()
     if toggle == "on":
-        free_space_enabled = True
+        free_space = True
         await ctx.send("The middle free space has been enabled.")
     elif toggle == "off":
-        free_space_enabled = False
+        free_space = False
         await ctx.send("The middle free space has been disabled.")
     else:
         await ctx.send("Invalid option. Use '/freeSpace on' to enable or '/freeSpace off' to disable.")
         return
 
     settings = load_settings()
-    settings["free_space_enabled"] = free_space_enabled
+    settings["free_space_enabled"] = free_space
     save_settings(settings)
 
 
@@ -335,6 +363,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('token', type=str, help='the bot token')
     args = parser.parse_args()
+
+    settings = load_settings()
+    global free_space, bingo_role
+    free_space = settings['free_space_enabled']
+    bingo_role = settings['bingo_role']
+
     bot.run(args.token)
 
 if __name__ == "__main__":
