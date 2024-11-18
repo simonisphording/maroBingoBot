@@ -409,9 +409,11 @@ def main():
     args = parser.parse_args()
 
     if not args.token:
-        bot_token = os.getenv('DISCORD_BOT_TOKEN')
+        token = os.getenv('DISCORD_BOT_TOKEN')
+    else:
+        token = args.token
 
-    bot.run(args.token)
+    bot.run(token)
 
 if __name__ == "__main__":
     main()
