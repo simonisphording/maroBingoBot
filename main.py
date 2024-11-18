@@ -366,6 +366,17 @@ async def free_space_on(ctx, toggle: str):
 
     save_settings(settings_file, settings)
 
+@bot.command(name="setRoleName", help="Set role name")
+async def set_role_name(ctx, role_name: str):
+    guild_id = ctx.guild.id
+    if not ctx.author.guild_permissions.administrator:
+        await ctx.send("You need to be an administrator to change settings.")
+        return
+
+    settings_file = f"{guild_id}/settings.json"
+    settings = load_settings(settings_file)
+    settings["bingo_role"] = role_name
+    save_settings(settings_file, settings)
 
 def main():
     parser = argparse.ArgumentParser()

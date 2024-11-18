@@ -9,7 +9,8 @@ Maro Bingo Bot is a simple python based Discord bot that can create bingo sheets
 - /viewBingoSheet: Allows any user to view their bingo sheet
 - /viewBingoSheet @[user]: Allows any user to view the bingo sheet of the mentioned user
 - /cross [square]: Allows any user to cross off a square on their bingo sheet. i.e. "/cross B1" to cross off cell B1.
-- /freespace [on/off]: Allows admins and users with a "Bingo Master" role to toggle free space on or off
+- /freeSpace [on/off]: Allows admins and users with a "Bingo Master" role to toggle free space on or off
+- /setRoleName [name]: Allows admins to set the name of the "Bingo Master" role (default is Bingo Master)
 
 # To Dos
 
