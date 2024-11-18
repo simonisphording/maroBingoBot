@@ -130,8 +130,8 @@ async def reset_maro_clues(ctx):
 
 @bot.command(name="listMaroClues", help="List all clues")
 async def list_maro_clues(ctx):
-    server_id = ctx.guild.id
-    clues_file = f"{server_id}/clues.txt"
+    guild_id = ctx.guild.id
+    clues_file = get_clues_file(guild_id)
     if not os.path.exists(clues_file):
         await ctx.send("No clues file found for this server. Please set clues using `/setMaroClues`.")
         return
