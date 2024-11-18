@@ -14,10 +14,6 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix='/', intents=intents, case_insensitive=True)
 
-settings_file = "settings.json"
-free_space = True
-bingo_role = "Bingo Master"
-
 def read_sheet(path):
     expansion = None
     clues = []
@@ -29,37 +25,68 @@ def read_sheet(path):
                 clues.append(line.strip())
     return expansion, clues
 
-def load_settings():
+def get_server_directory(guild_id):
+    return f"servers/{guild_id}"
+
+def get_settings_file(guild_id):
+    return os.path.join(get_server_directory(guild_id), "settings.json")
+
+def get_clues_file(guild_id):
+    return os.path.join(get_server_directory(guild_id), "clues.txt")
+
+def get_bingo_sheets_directory(guild_id):
+    return os.path.join(get_server_directory(guild_id), "bingo_sheets")
+
+def ensure_server_directories(guild_id):
+    server_dir = get_server_directory(guild_id)
+    bingo_sheets_dir = get_bingo_sheets_directory(guild_id)
+
+    os.makedirs(server_dir, exist_ok=True)
+    os.makedirs(bingo_sheets_dir, exist_ok=True)
+
+def load_settings(settings_file):
     try:
         with open(settings_file, "r") as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return {"free_space_enabled": False, "bingo_role": "Bingo Master"}
 
-def save_settings(settings):
+def save_settings(settings_file, settings):
+    os.makedirs(os.path.dirname(settings_file), exist_ok=True)
     with open(settings_file, "w") as f:
         json.dump(settings, f)
 
+@bot.event
+async def on_guild_join(guild):
+    ensure_server_directories(guild.id)
+
+@bot.event
+async def on_ready():
+    for guild in bot.guilds:
+        ensure_server_directories(guild.id)
+    print(f"Bot is ready and connected to {len(bot.guilds)} server(s).")
+
 @bot.command(name="setMaroClues", help="Set clues for the upcoming expansion.")
 async def set_maro_clues(ctx):
+    guild_id = ctx.guild.id
+    ensure_server_directories(guild_id)
+    clues_file = get_clues_file(guild_id)
+    settings = load_settings(f"{guild_id}/settings.json")
+    bingo_role = settings["bingo_role"]
+
     # Check if the user has administrator permissions or bingo role
     has_bingo_role = discord.utils.get(ctx.author.roles, name=bingo_role)
-
     if not (ctx.author.guild_permissions.administrator or has_bingo_role):
-        await ctx.send("You need to be an administrator to set the clues.")
+        await ctx.send("You need to be an administrator or have the Bingo Master role to set the clues.")
         return
 
     def check(message):
         return message.author == ctx.author and message.channel == ctx.channel
 
-    # Prompt the user to provide clues
-    await ctx.send("Please provide the clues for the upcoming expansion. The clues should be formatted as follows:\n\\# [Expansion name]\n[Clue 1]\n[Clue 2]\n\nFor example:\n\\# Foundations (FDN)\n3 dragon cards\nBoth monocolor reprints, each of a different color, that together win you the game\n1/1 white Rabbit token")
+    await ctx.send("Please provide the clues for the upcoming expansion...")
 
     try:
-        # Collect the clues from the user's message (with a timeout of 60 seconds)
         user_response = await bot.wait_for('message', check=check, timeout=60.0)
-
-        # Split the clues by newlines and filter out empty lines
         clues = [line.strip() for line in user_response.content.splitlines() if line.strip()]
 
         if not clues[0].startswith("#"):
@@ -69,8 +96,7 @@ async def set_maro_clues(ctx):
             await ctx.send("You must provide at least 24 clues. Please try again.")
             return
 
-        # Save the clues to the file
-        with open('clues.txt', 'w', encoding='utf-8') as outfile:
+        with open(clues_file, 'w', encoding='utf-8') as outfile:
             for clue in clues:
                 outfile.write(f"{clue}\n")
 
@@ -81,82 +107,66 @@ async def set_maro_clues(ctx):
 
 @bot.command(name="listMaroClues", help="List all clues")
 async def list_maro_clues(ctx):
-    expansion, clues = read_sheet("clues.txt")
+    server_id = ctx.guild.id
+    clues_file = f"{server_id}/clues.txt"
+    if not os.path.exists(clues_file):
+        await ctx.send("No clues file found for this server. Please set clues using `/setMaroClues`.")
+        return
+    expansion, clues = read_sheet(clues_file)
     clues_text = "\n".join(clues)
     await ctx.send(f"**Clues for {expansion}:**\n```{clues_text}```")
 
-@bot.command(name="createBingoSheet", help="Create a new BINGO sheet for yourself or another user (Admins only).")
+@bot.command(name="createBingoSheet", help="Create a new BINGO sheet for yourself or another user.")
 async def create_bingo_sheet(ctx, target_user: discord.Member = None):
-    # Determine the user for whom to create the bingo sheet
-    user = target_user if target_user else ctx.author
-    user_bingo_file = f"bingo_sheets/{user.id}.txt"
+    guild_id = ctx.guild.id
+    ensure_server_directories(guild_id)
+    clues_file = get_clues_file(guild_id)
+    bingo_sheets_dir = get_bingo_sheets_directory(guild_id)
 
-    # Check if the command is invoked by an admin when targeting another user
+    settings = load_settings(f"{guild_id}/settings.json")
+    free_space = settings.get("free_space_enabled", False)
+    bingo_role = settings.get("bingo_role", "Bingo Master")
     has_bingo_role = discord.utils.get(ctx.author.roles, name=bingo_role)
+
+    user = target_user if target_user else ctx.author
+    user_bingo_file = os.path.join(bingo_sheets_dir, f"{user.id}.txt")
+
     if target_user and not (ctx.author.guild_permissions.administrator or has_bingo_role):
-        await ctx.send("Only administrators can create a bingo sheet for other users.")
+        await ctx.send("You need admin or Bingo Master role to create sheets for others.")
         return
 
-    # Read clues from 'clues.txt'
-    if not os.path.exists("clues.txt"):
+    if not os.path.exists(clues_file):
         await ctx.send("No clues file found. Please set clues using `/setMaroClues`.")
         return
 
-    expansion, clues = read_sheet("clues.txt")
+    expansion, clues = read_sheet(clues_file)
 
-    # Warn if user already has a sheet for the same expansion
     if os.path.exists(user_bingo_file):
         user_expansion, user_clues = read_sheet(user_bingo_file)
         if user_expansion == expansion:
-            if target_user:
-                await ctx.send(
-                    f"{user.mention}, already has a bingo sheet for '{expansion}'. "
-                    "Would you like to overwrite it? Reply with 'yes' to confirm, or 'no' to cancel."
-                )
-            else:
-                await ctx.send(
-                    f"{user.mention}, you already have a bingo sheet for '{expansion}'. "
-                    "Would you like to overwrite it? Reply with 'yes' to confirm, or 'no' to cancel."
-                )
-
-            def check(m):
-                return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() in ["yes", "no"]
-
-            try:
-                response = await bot.wait_for("message", check=check, timeout=30.0)
-                if response.content.lower() != "yes":
-                    await ctx.send("Bingo sheet creation canceled.")
-                    return
-            except asyncio.TimeoutError:
-                await ctx.send("No response received. Bingo sheet creation canceled.")
+            await ctx.send(f"{user.mention} already has a bingo sheet for '{expansion}'. Overwrite? (yes/no)")
+            response = await bot.wait_for("message", timeout=30.0)
+            if response.content.lower() != "yes":
+                await ctx.send("Creation canceled.")
                 return
 
-    # Select random clues
     clue_selection = sample(clues, 25)
-
-    # Set middle to free if applicable
     if free_space:
         clue_selection[12] = "Free"
 
-    # Save the new bingo sheet
     with open(user_bingo_file, 'w') as outfile:
         outfile.write(f"# {expansion}\n")
         for c in clue_selection:
             outfile.write(c + "\n")
 
-    # Notify the creation
-    if target_user:
-        await ctx.send(f"Bingo sheet created for {user.mention}.")
-    else:
-        await ctx.send(f"{user.mention}, your new bingo sheet has been created.")
-
-    # Display the newly created bingo sheet
+    await ctx.send(f"Bingo sheet created for {user.mention}.")
     await view_bingo_sheet(ctx, user)
 
 @bot.command(name="viewBingoSheet", help="View your BINGO sheet")
 async def view_bingo_sheet(message, target_user: discord.Member = None):
+    server_id = message.guild.id
     user = target_user if target_user else message.author
-    user_bingo_file = f"bingo_sheets/{user.id}.txt"
+    user_bingo_file = f"{server_id}/bingo_sheets/{user.id}.txt"
 
     # Check if the user has a bingo sheet
     if not os.path.exists(user_bingo_file):
@@ -164,10 +174,7 @@ async def view_bingo_sheet(message, target_user: discord.Member = None):
         return
 
     # Read the user's bingo sheet clues
-    with open(user_bingo_file, 'r', encoding='utf-8') as infile:
-        lines = infile.readlines()
-        expansion = lines[0][2:].strip()  # Get the expansion title
-        clues = [line.strip() for line in lines[1:]]
+    expansion, clues = read_sheet(user_bingo_file)
 
     # Ensure we have exactly 25 clues
     if len(clues) != 25:
@@ -284,7 +291,7 @@ async def view_bingo_sheet(message, target_user: discord.Member = None):
                 draw.line([x, y, x + cell_size, y + cell_size], fill="red", width=3)
                 draw.line([x + cell_size, y, x, y + cell_size], fill="red", width=3)
 
-    image_path = f"temp_bingo_{user.id}.png"
+    image_path = f"{server_id}/temp_bingo_{user.id}.png"
     img.save(image_path)
 
     with open(image_path, "rb") as f:
@@ -295,7 +302,8 @@ async def view_bingo_sheet(message, target_user: discord.Member = None):
 
 @bot.command(name="cross", help="Cross off a cell on your BINGO sheet")
 async def cross_off_square(ctx, square: str):
-    user_bingo_file = f"bingo_sheets/{ctx.author.id}.txt"
+    server_id = ctx.guild.id
+    user_bingo_file = f"{server_id}/bingo_sheets/{ctx.author.id}.txt"
 
     if not os.path.exists(user_bingo_file):
         await ctx.send("You don't have a bingo sheet yet. Use `/createBingoSheet` to create one.")
@@ -334,39 +342,35 @@ async def cross_off_square(ctx, square: str):
 
 @bot.command(name="freeSpace", help="Make middle spaces free")
 async def free_space_on(ctx, toggle: str):
+    guild_id = ctx.guild.id
+    settings_file = f"{guild_id}/settings.json"
+    settings = load_settings(settings_file)
+    bingo_role = settings["bingo_role"]
+
     has_bingo_role = discord.utils.get(ctx.author.roles, name=bingo_role)
     if not (ctx.author.guild_permissions.administrator or has_bingo_role):
         await ctx.send("You need to be an administrator to change settings.")
         return
 
-    global free_space
-
     # Check if the toggle input is valid
     toggle = toggle.lower()
     if toggle == "on":
-        free_space = True
+        settings["free_space_enabled"] = True
         await ctx.send("The middle free space has been enabled.")
     elif toggle == "off":
-        free_space = False
+        settings["free_space_enabled"] = False
         await ctx.send("The middle free space has been disabled.")
     else:
         await ctx.send("Invalid option. Use '/freeSpace on' to enable or '/freeSpace off' to disable.")
         return
 
-    settings = load_settings()
-    settings["free_space_enabled"] = free_space
-    save_settings(settings)
+    save_settings(settings_file, settings)
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('token', type=str, help='the bot token')
     args = parser.parse_args()
-
-    settings = load_settings()
-    global free_space, bingo_role
-    free_space = settings['free_space_enabled']
-    bingo_role = settings['bingo_role']
 
     bot.run(args.token)
 
