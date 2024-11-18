@@ -405,7 +405,7 @@ async def set_role_name(ctx, role_name: str):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-t' '--token', type=str, help='the bot token', default=None)
+    parser.add_argument('-t', '--token', type=str, help='the bot token', default=None)
     args = parser.parse_args()
 
     if not args.token:
