@@ -187,9 +187,10 @@ async def create_bingo_sheet(ctx, target_user: discord.Member = None):
 
 @bot.command(name="viewBingoSheet", help="View your BINGO sheet")
 async def view_bingo_sheet(message, target_user: discord.Member = None):
-    server_id = message.guild.id
+    guild_id = message.guild.id
     user = target_user if target_user else message.author
-    user_bingo_file = f"{server_id}/bingo_sheets/{user.id}.txt"
+    bingo_sheets_dir = get_bingo_sheets_directory(guild_id)
+    user_bingo_file = os.path.join(bingo_sheets_dir, f"{user.id}.txt")
 
     # Check if the user has a bingo sheet
     if not os.path.exists(user_bingo_file):
@@ -314,7 +315,7 @@ async def view_bingo_sheet(message, target_user: discord.Member = None):
                 draw.line([x, y, x + cell_size, y + cell_size], fill="red", width=3)
                 draw.line([x + cell_size, y, x, y + cell_size], fill="red", width=3)
 
-    image_path = f"{server_id}/temp_bingo_{user.id}.png"
+    image_path = f"servers/{guild_id}/temp_bingo_{user.id}.png"
     img.save(image_path)
 
     with open(image_path, "rb") as f:
@@ -325,8 +326,9 @@ async def view_bingo_sheet(message, target_user: discord.Member = None):
 
 @bot.command(name="cross", help="Cross off a cell on your BINGO sheet")
 async def cross_off_square(ctx, square: str):
-    server_id = ctx.guild.id
-    user_bingo_file = f"{server_id}/bingo_sheets/{ctx.author.id}.txt"
+    guild_id = ctx.guild.id
+    bingo_sheets_dir = get_bingo_sheets_directory(guild_id)
+    user_bingo_file = os.path.join(bingo_sheets_dir, f"{ctx.author.id}.txt")
 
     if not os.path.exists(user_bingo_file):
         await ctx.send("You don't have a bingo sheet yet. Use `/createBingoSheet` to create one.")
