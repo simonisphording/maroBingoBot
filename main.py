@@ -1,6 +1,8 @@
 import argparse
 import os
 import re
+import shutil
+
 import discord
 import asyncio
 import json
@@ -40,9 +42,12 @@ def get_bingo_sheets_directory(guild_id):
 def ensure_server_directories(guild_id):
     server_dir = get_server_directory(guild_id)
     bingo_sheets_dir = get_bingo_sheets_directory(guild_id)
+    clues_file = get_clues_file(guild_id)
 
     os.makedirs(server_dir, exist_ok=True)
     os.makedirs(bingo_sheets_dir, exist_ok=True)
+    if not os.path.exists(clues_file):
+        shutil.copyfile("clues.txt", clues_file)
 
 def load_settings(settings_file):
     try:
@@ -104,6 +109,24 @@ async def set_maro_clues(ctx):
 
     except asyncio.TimeoutError:
         await ctx.send("You took too long to respond. Please try again.")
+
+@bot.command(name="resetMaroClues", help="Sets clues to the server's default")
+async def reset_maro_clues(ctx):
+    guild_id = ctx.guild.id
+
+    settings = load_settings(f"{guild_id}/settings.json")
+    bingo_role = settings["bingo_role"]
+
+    # Check if the user has administrator permissions or bingo role
+    has_bingo_role = discord.utils.get(ctx.author.roles, name=bingo_role)
+    if not (ctx.author.guild_permissions.administrator or has_bingo_role):
+        await ctx.send("You need to be an administrator or have the Bingo Master role to set the clues.")
+        return
+
+    ensure_server_directories(guild_id)
+    clues_file = get_clues_file(guild_id)
+
+    shutil.copyfile("clues.txt", clues_file)
 
 @bot.command(name="listMaroClues", help="List all clues")
 async def list_maro_clues(ctx):
@@ -343,7 +366,7 @@ async def cross_off_square(ctx, square: str):
 @bot.command(name="freeSpace", help="Make middle spaces free")
 async def free_space_on(ctx, toggle: str):
     guild_id = ctx.guild.id
-    settings_file = f"{guild_id}/settings.json"
+    settings_file = get_settings_file(guild_id)
     settings = load_settings(settings_file)
     bingo_role = settings["bingo_role"]
 
@@ -373,7 +396,7 @@ async def set_role_name(ctx, role_name: str):
         await ctx.send("You need to be an administrator to change settings.")
         return
 
-    settings_file = f"{guild_id}/settings.json"
+    settings_file = get_settings_file(guild_id)
     settings = load_settings(settings_file)
     settings["bingo_role"] = role_name
     save_settings(settings_file, settings)
