@@ -145,8 +145,8 @@ async def create_bingo_sheet(ctx, target_user: discord.Member = None):
     ensure_server_directories(guild_id)
     clues_file = get_clues_file(guild_id)
     bingo_sheets_dir = get_bingo_sheets_directory(guild_id)
-
-    settings = load_settings(f"{guild_id}/settings.json")
+    settings_file = get_settings_file(guild_id)
+    settings = load_settings(settings_file)
     free_space = settings.get("free_space_enabled", False)
     bingo_role = settings.get("bingo_role", "Bingo Master")
     has_bingo_role = discord.utils.get(ctx.author.roles, name=bingo_role)
