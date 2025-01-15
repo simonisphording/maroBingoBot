@@ -185,7 +185,7 @@ async def create_bingo_sheet(ctx, target_user: discord.Member = None):
     await ctx.send(f"Bingo sheet created for {user.mention}.")
     await view_bingo_sheet(ctx, user)
 
-@bot.command(name="viewBingoSheet", help="View your BINGO sheet")
+@bot.command(name="viewBingoSheet", help="View your BINGO sheet", aliases=["viewBingoCard"])
 async def view_bingo_sheet(message, target_user: discord.Member = None):
     guild_id = message.guild.id
     user = target_user if target_user else message.author
@@ -364,6 +364,49 @@ async def cross_off_square(ctx, square: str):
         outfile.write("\n".join(clues) + "\n")
 
     await view_bingo_sheet(ctx)
+
+
+@bot.command(name="uncross", help="Remove a previously set cross")
+async def uncross_square(ctx, square: str):
+    guild_id = ctx.guild.id
+    bingo_sheets_dir = get_bingo_sheets_directory(guild_id)
+    user_bingo_file = os.path.join(bingo_sheets_dir, f"{ctx.author.id}.txt")
+
+    if not os.path.exists(user_bingo_file):
+        await ctx.send("You don't have a bingo sheet yet. Use `/createBingoSheet` to create one.")
+        return
+
+    match = re.match(r'([A-E][1-5])', square.upper())
+    if not match:
+        await ctx.send("Please specify a valid square (e.g., `/cross B3`).")
+        return
+
+    square_id = match.group(1)
+    col_letter = square_id[0]
+    row_number = int(square_id[1])
+
+    column_index = ord(col_letter) - ord('A')
+    row_index = row_number - 1
+    clue_index = row_index * 5 + column_index
+
+    expansion, clues = read_sheet(user_bingo_file)
+
+    if clue_index >= len(clues):
+        await ctx.send("Invalid square. Please check your input.")
+        return
+
+    if not clues[clue_index].endswith(" X"):
+        await ctx.send("This square was not crossed off.")
+        return
+
+    clues[clue_index] = clues[clue_index][:-2]
+
+    with open(user_bingo_file, 'w') as outfile:
+        outfile.write(f"# {expansion}\n")
+        outfile.write("\n".join(clues) + "\n")
+
+    await view_bingo_sheet(ctx)
+
 
 @bot.command(name="freeSpace", help="Make middle spaces free")
 async def free_space_on(ctx, toggle: str):
