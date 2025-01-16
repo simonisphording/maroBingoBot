@@ -377,7 +377,7 @@ async def cross_off_square(ctx, square: str, target_user: discord.Member = None)
         outfile.write(f"# {expansion}\n")
         outfile.write("\n".join(clues) + "\n")
 
-    await view_bingo_sheet(ctx)
+    await view_bingo_sheet(ctx, target_user = user)
 
 
 @bot.command(name="uncross", help="Remove a previously set cross")
@@ -433,7 +433,7 @@ async def uncross_square(ctx, square: str, target_user: discord.Member = None):
         outfile.write(f"# {expansion}\n")
         outfile.write("\n".join(clues) + "\n")
 
-    await view_bingo_sheet(ctx)
+    await view_bingo_sheet(ctx, target_user=user)
 
 
 @bot.command(name="freeSpace", help="Make middle spaces free")
