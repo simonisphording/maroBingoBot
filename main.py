@@ -223,7 +223,7 @@ async def create_bingo_sheet(ctx, target_user: discord.Member = None):
 
     # Reset "bingo_declared" for this user
     user_settings = settings["users"].get(str(user.id), {"bingo_declared": False})
-    user_settings["bingo_declared"] = True
+    user_settings["bingo_declared"] = False
     settings["users"][str(user.id)] = user_settings
     save_settings(settings_file, settings)
 
