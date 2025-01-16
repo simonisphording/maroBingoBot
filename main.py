@@ -325,13 +325,27 @@ async def view_bingo_sheet(message, target_user: discord.Member = None):
     os.remove(image_path)
 
 @bot.command(name="cross", help="Cross off a cell on your BINGO sheet")
-async def cross_off_square(ctx, square: str):
+async def cross_off_square(ctx, square: str, target_user: discord.Member = None):
     guild_id = ctx.guild.id
     bingo_sheets_dir = get_bingo_sheets_directory(guild_id)
-    user_bingo_file = os.path.join(bingo_sheets_dir, f"{ctx.author.id}.txt")
+
+    settings_file = get_settings_file(guild_id)
+    settings = load_settings(settings_file)
+    bingo_role = settings.get("bingo_role", "Bingo Master")
+    has_bingo_role = discord.utils.get(ctx.author.roles, name=bingo_role)
+
+    user = target_user if target_user else ctx.author
+    user_bingo_file = os.path.join(bingo_sheets_dir, f"{user.id}.txt")
+
+    if target_user and not (ctx.author.guild_permissions.administrator or has_bingo_role):
+        await ctx.send("You need admin or Bingo Master role to cross off cells for others.")
+        return
 
     if not os.path.exists(user_bingo_file):
-        await ctx.send("You don't have a bingo sheet yet. Use `/createBingoSheet` to create one.")
+        if target_user:
+            await ctx.send(f"{user.name} does not have a bingo sheet yet. Use `/createBingoSheet` to create one.")
+        else:
+            await ctx.send(f"You don't have a bingo sheet yet. Use `/createBingoSheet` to create one.")
         return
 
     match = re.match(r'([A-E][1-5])', square.upper())
@@ -367,13 +381,27 @@ async def cross_off_square(ctx, square: str):
 
 
 @bot.command(name="uncross", help="Remove a previously set cross")
-async def uncross_square(ctx, square: str):
+async def uncross_square(ctx, square: str, target_user: discord.Member = None):
     guild_id = ctx.guild.id
     bingo_sheets_dir = get_bingo_sheets_directory(guild_id)
-    user_bingo_file = os.path.join(bingo_sheets_dir, f"{ctx.author.id}.txt")
+
+    settings_file = get_settings_file(guild_id)
+    settings = load_settings(settings_file)
+    bingo_role = settings.get("bingo_role", "Bingo Master")
+    has_bingo_role = discord.utils.get(ctx.author.roles, name=bingo_role)
+
+    user = target_user if target_user else ctx.author
+    user_bingo_file = os.path.join(bingo_sheets_dir, f"{user.id}.txt")
+
+    if target_user and not (ctx.author.guild_permissions.administrator or has_bingo_role):
+        await ctx.send("You need admin or Bingo Master role to uncross cells for others.")
+        return
 
     if not os.path.exists(user_bingo_file):
-        await ctx.send("You don't have a bingo sheet yet. Use `/createBingoSheet` to create one.")
+        if target_user:
+            await ctx.send(f"{user.name} does not have a bingo sheet yet. Use `/createBingoSheet` to create one.")
+        else:
+            await ctx.send(f"You don't have a bingo sheet yet. Use `/createBingoSheet` to create one.")
         return
 
     match = re.match(r'([A-E][1-5])', square.upper())
