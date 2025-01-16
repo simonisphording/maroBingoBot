@@ -320,7 +320,7 @@ async def view_bingo_sheet(message, target_user: discord.Member = None):
 
     with open(image_path, "rb") as f:
         picture = discord.File(f)
-        await message.channel.send(f"{user.mention}'s Bingo Sheet for '{expansion}'", file=picture)
+        await message.channel.send(f"{user.name}'s Bingo Sheet for '{expansion}'", file=picture)
 
     os.remove(image_path)
 
