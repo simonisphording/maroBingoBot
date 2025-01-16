@@ -92,7 +92,7 @@ def bingo_declared(user_bingo_file):
         lines = f.readlines()
 
     if bingo_marker in lines:
-        return True  # Bingo has already been declared
+        return True
 
     # Append the marker and save the file
     with open(user_bingo_file, 'a') as f:
@@ -220,6 +220,12 @@ async def create_bingo_sheet(ctx, target_user: discord.Member = None):
         outfile.write(f"# {expansion}\n")
         for c in clue_selection:
             outfile.write(c + "\n")
+
+    # Reset "bingo_declared" for this user
+    user_settings = settings["users"].get(str(user.id), {"bingo_declared": False})
+    user_settings["bingo_declared"] = True
+    settings["users"][str(user.id)] = user_settings
+    save_settings(settings_file, settings)
 
     await ctx.send(f"Bingo sheet created for {user.mention}.")
     await view_bingo_sheet(ctx, user)
@@ -440,6 +446,8 @@ async def uncross_square(ctx, square: str, target_user: discord.Member = None):
     user = target_user if target_user else ctx.author
     user_bingo_file = os.path.join(bingo_sheets_dir, f"{user.id}.txt")
 
+    user_settings = settings["users"].get(str(user.id), {"bingo_declared": False})
+
     if target_user and not (ctx.author.guild_permissions.administrator or has_bingo_role):
         await ctx.send("You need admin or Bingo Master role to uncross cells for others.")
         return
@@ -479,6 +487,12 @@ async def uncross_square(ctx, square: str, target_user: discord.Member = None):
     with open(user_bingo_file, 'w') as outfile:
         outfile.write(f"# {expansion}\n")
         outfile.write("\n".join(clues) + "\n")
+
+    # Remove declared bingo if necessary
+    if not check_bingo(clues):
+        user_settings["bingo_declared"] = False
+        settings["users"][str(user.id)] = user_settings
+        save_settings(settings_file, settings)
 
     await view_bingo_sheet(ctx, target_user=user)
 
