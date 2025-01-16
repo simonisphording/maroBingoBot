@@ -54,12 +54,16 @@ def load_settings(settings_file):
         with open(settings_file, "r") as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        return {"free_space_enabled": False, "bingo_role": "Bingo Master"}
+        return {
+            "free_space_enabled": False,
+            "bingo_role": "Bingo Master",
+            "users": {}
+        }
 
 def save_settings(settings_file, settings):
     os.makedirs(os.path.dirname(settings_file), exist_ok=True)
     with open(settings_file, "w") as f:
-        json.dump(settings, f)
+        json.dump(settings, f, indent=4)
 
 def check_bingo(clues):
     size = 5  # Bingo board is always 5x5
@@ -79,6 +83,20 @@ def check_bingo(clues):
     if all(board[i][i].endswith(" X") for i in range(size)) or \
        all(board[i][size-i-1].endswith(" X") for i in range(size)):
         return True
+
+    return False
+
+def bingo_declared(user_bingo_file):
+    bingo_marker = "# BINGO DECLARED"
+    with open(user_bingo_file, 'r') as f:
+        lines = f.readlines()
+
+    if bingo_marker in lines:
+        return True  # Bingo has already been declared
+
+    # Append the marker and save the file
+    with open(user_bingo_file, 'a') as f:
+        f.write(f"{bingo_marker}\n")
 
     return False
 
@@ -358,6 +376,8 @@ async def cross_off_square(ctx, square: str, target_user: discord.Member = None)
     user = target_user if target_user else ctx.author
     user_bingo_file = os.path.join(bingo_sheets_dir, f"{user.id}.txt")
 
+    user_settings = settings["users"].get(str(user.id), {"bingo_declared": False})
+
     if target_user and not (ctx.author.guild_permissions.administrator or has_bingo_role):
         await ctx.send("You need admin or Bingo Master role to cross off cells for others.")
         return
@@ -398,8 +418,11 @@ async def cross_off_square(ctx, square: str, target_user: discord.Member = None)
         outfile.write(f"# {expansion}\n")
         outfile.write("\n".join(clues) + "\n")
 
-    if check_bingo(clues):
+    if check_bingo(clues) and not user_settings.get("bingo_declared", False):
         await ctx.send(f"BINGO! Congratulations {user.name}")
+        user_settings["bingo_declared"] = True
+        settings["users"][str(user.id)] = user_settings
+        save_settings(settings_file, settings)
 
     await view_bingo_sheet(ctx, target_user = user)
 
