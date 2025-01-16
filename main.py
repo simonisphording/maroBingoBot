@@ -61,6 +61,27 @@ def save_settings(settings_file, settings):
     with open(settings_file, "w") as f:
         json.dump(settings, f)
 
+def check_bingo(clues):
+    size = 5  # Bingo board is always 5x5
+    board = [clues[i:i+size] for i in range(0, len(clues), size)]  # Create a 5x5 board
+
+    # Check rows for Bingo
+    for row in board:
+        if all(clue.endswith(" X") for clue in row):
+            return True
+
+    # Check columns for Bingo
+    for col in range(size):
+        if all(board[row][col].endswith(" X") for row in range(size)):
+            return True
+
+    # Check diagonals for Bingo
+    if all(board[i][i].endswith(" X") for i in range(size)) or \
+       all(board[i][size-i-1].endswith(" X") for i in range(size)):
+        return True
+
+    return False
+
 @bot.event
 async def on_guild_join(guild):
     ensure_server_directories(guild.id)
@@ -376,6 +397,9 @@ async def cross_off_square(ctx, square: str, target_user: discord.Member = None)
     with open(user_bingo_file, 'w') as outfile:
         outfile.write(f"# {expansion}\n")
         outfile.write("\n".join(clues) + "\n")
+
+    if check_bingo(clues):
+        await ctx.send(f"BINGO! Congratulations {user.name}")
 
     await view_bingo_sheet(ctx, target_user = user)
 
