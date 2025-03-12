@@ -178,7 +178,7 @@ async def list_maro_clues(ctx):
     clues_text = "\n".join(clues)
     await ctx.send(f"**Clues for {expansion}:**\n```{clues_text}```")
 
-@bot.command(name="createBingoSheet", help="Create a new BINGO sheet for yourself or another user.")
+@bot.command(name="createBingoSheet", help="Create a new BINGO sheet for yourself or another user.", aliases=["addBingoSheet", "newBingoSheet"])
 async def create_bingo_sheet(ctx, target_user: discord.Member = None):
     guild_id = ctx.guild.id
     ensure_server_directories(guild_id)
